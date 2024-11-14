@@ -1,4 +1,4 @@
-# Power up your Polars code with Polars extension
+arguments# Power up your Polars code with Polars extension
 
 ## Why polars plugin?
 
@@ -76,13 +76,13 @@ These are the versions that we are using here:
 
  ---
 
- ## First Polars expression plugin
+ ## Introduction: First Polars expression plugin
 
  Let's start by building a simple (but useful) expression. Imagine you would like to capitalise a series of names. In Python we have the build-in function to do so, but it is slow. We will try cresting something in Rust to do it.
 
  *Please note that this only work for ASCII characters, details please check [this discussion](https://stackoverflow.com/questions/38406793/why-is-capitalizing-the-first-letter-of-a-string-so-convoluted-in-rust)*
 
- ## Step 1: start a project with build settings
+ ### Step 1: start a project with build settings
 
  Use maturin to create a project:
 
@@ -114,7 +114,7 @@ module-name = "polars_plugin_101._internal"
 
 to the `tool.maturin` session. We name our module `_internal` as it is an internal module to be used by polars.
 
-## Step 2: define expression logic in Rust
+### Step 2: define expression logic in Rust
 
 Next, we will start developing our expression. In `src/` we have `lib.rs`, but we will create another file called `expressions.rs` to store all our custom functions.
 
@@ -166,7 +166,7 @@ static ALLOC: PolarsAllocator = PolarsAllocator::new();
 
 For details of how to create a Python module using PyO3, please check out the other workshop [PyO3 101](https://github.com/Cheukting/py03_101/blob/main/README.md#write-our-library-code-in-rust), the difference here is that, the methods are added by `PolarsAllocator` instead of each one manually.
 
-## Step 3: register plugin expression with Polars
+### Step 3: register plugin expression with Polars
 
 To make sure Polars can find our plugin, we need to do something on the Python side. First, we will create a `__init__.py` file in the folder that matches the name of your plugin module. In our case it is `polars_plugin_101`, remember in the pyproject.toml we have:
 
@@ -207,7 +207,7 @@ This is using the plugin path, where our module created in Rust will be, to crea
 Finally, we can build and test our plugin. Again, we will use `maturin`:
 
 ```
-maturin develop --release
+maturin develop
 ```
 
 It may take a while building for the first time, so please be patient. While waiting, why not wirte a simple Python script to test this plugin expression out?
@@ -226,6 +226,212 @@ out = df.with_columns(names=capitalize("attendees"))
 print(out)
 ```
 
-Congratulations, you have just created your first Polars plugin in Rust.
+Congratulations, you have just created your first Polars plugin in Rust. Feel free to play around and test it out more.
 
 ---
+
+## Simple numerical functions plugins
+
+For the last exercise, we have created a expression that works on strings and create strings. Let's move one step further and create an expression that work on numerical values.
+
+### Converting Celcius to Farenheit
+
+Remember the formula to convert temperature in Celcius to Farenheit as:
+
+```
+deg_f = (deg_c * 9/5) + 32
+```
+
+Can we make a Polars plugin to convert a column of temperature in Celcius to Farenheit?
+
+First, we will define the expression in `src/expressions.rs`:
+
+```rust
+#[polars_expr(output_type=Float64)]
+fn to_farenheit(inputs: &[Series]) -> PolarsResult<Series> {
+    let s = &inputs[0];
+    let ca: &Float64Chunked = s.f64()?;
+    let out: Float64Chunked = ca.apply_values(|deg_c| deg_c * 9.0/5.0 + 32.0 );
+    Ok(out.into_series())
+}
+```
+
+Note that this time the `output_type` is `Float64` instead.
+
+Next, we will have to register this expression with Polars, in `polars_plugin_101/__init__.py`:
+
+```python
+def to_farenheit(expr: IntoExpr) -> pl.Expr:
+    """Converting Celcius to Farenheit."""
+    return register_plugin_function(
+        plugin_path=PLUGIN_PATH,
+        function_name="to_farenheit",
+        args=expr,
+        is_elementwise=True,
+    )
+```
+
+This is similar to what we have done in the previous example.
+
+Now, let's test it out by `maturin develop` and writing some Python code. Note that the correct datatype is required for the expression to work.
+
+### Getting the larger value
+
+Now, let's consider taking two values as inputs, they are from the same row but on a different columns. How do we go about to do that?
+
+For example, we would like to output the larger values of the values of the two columns. In `src/expressions.rs`
+
+```rust
+use polars::prelude::arity::broadcast_binary_elementwise_values;
+
+#[polars_expr(output_type=Int64)]
+fn larger(inputs: &[Series]) -> PolarsResult<Series> {
+    let first: &Int64Chunked = inputs[0].i64()?;
+    let second: &Int64Chunked = inputs[1].i64()?;
+    let out: Int64Chunked = broadcast_binary_elementwise_values(
+        first,
+        second,
+        |first: i64, second: i64| std::cmp::max(first , second)
+    );
+    Ok(out.into_series())
+}
+```
+
+Here we use `broadcast_binary_elementwise_values` provided in `polars::prelude::arity`, so make sure to include the `use` line.
+
+When we register it with Polars in `polars_plugin_101/__init__.py`:
+
+```python
+def larger(expr1: IntoExpr, expr2: IntoExpr) -> pl.Expr:
+    """Return larger value."""
+    return register_plugin_function(
+        plugin_path=PLUGIN_PATH,
+        function_name="larger",
+        args=[expr1, expr2],
+        is_elementwise=True,
+    )
+```
+
+We take two arguments `expr1` and `expr2` and combine the into a list to pass in `args` to match the type `&[Series]` in our Rust input.
+
+Now it's time to `maturin develop` and test it out! If you want an **extra challenge**, could you create an expression `largest` which take an arbitrary amount of inputs and always output the largest? ([see possible solution here](/ans))
+
+---
+
+## Advance usage with Polars plugin
+
+### Accumulative strings
+
+So far we have only doing row-wise operations, what if an operation like accumulative sum or rolling average? Here we will try to perform something similar to an accumulative sum but with a twist. We will be linking up all the strings in the same column into a mega string.
+
+In `exprssions.rs`, we deine the function:
+
+```rust
+#[polars_expr(output_type=String)]
+fn cum_str(inputs: &[Series]) -> PolarsResult<Series> {
+    let s = &inputs[0];
+    let ca = s.str()?;
+    let out: StringChunked = ca
+        .iter()
+        .scan(String::new(), |sentance: &mut String, x: Option<&str>| {
+            match x {
+                Some(x) => {
+                    sentance.push_str(" ");
+                    sentance.push_str(x);
+                    Some(Some(sentance.clone()))
+                },
+                None => Some(None),
+            }
+        })
+        .collect_trusted();
+    Ok(out.into_series())
+}
+```
+
+Note that this time we process the data as an iterator and uses the [scan](https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.scan) method which holds an internal state, which we can used to store the accumulated sentence so far.
+
+Also note that we need to return `Some(Some(sentance.clone()))` instead of `Some(Some(sentance))` to ensure the life time of the return values are long enough.
+
+We used `collect_trusted` at the end so we need to add:
+
+```rust
+use pyo3_polars::export::polars_core::utils::CustomIterTools;
+```
+
+Next, in `__init__.py`:
+
+```python
+def cum_str(expr: IntoExprColumn) -> pl.Expr:
+    return register_plugin_function(
+        plugin_path=PLUGIN_PATH,
+        function_name="cum_str",
+        args=[expr],
+        is_elementwise=False,
+    )
+```
+
+Note that we have set `is_elementwise` to `False` and the `args` takes `[expr]` as we are expecting the whole column will be used as input.
+
+Build and try out the `cum_str` expression. For an **extra challenge**, could you create an expression that takes multiple columns as input? You can start by extend our `cum_str` to string multiple columns. ([see possible solution here](/ans))
+
+### Taking a user argument input
+
+In the above exercise, we separate the strings with a space, what if the user want another separator string instead of a single space? Here is how we can take an argument provide by the user, in `expressions.rs`:
+
+```rust
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct AddKwargs {
+    sep: String,
+}
+```
+
+We use a struct to hold the kwargs, we derive a `Deserialize` trait for it so we can use it later. Now we can modify our function for `cum_str`:
+
+```rust
+#[polars_expr(output_type=String)]
+fn cum_str(inputs: &[Series], kwargs: AddKwargs) -> PolarsResult<Series> {
+    let s = &inputs[0];
+    let ca = s.str()?;
+    let out: StringChunked = ca
+        .iter()
+        .scan(String::new(), |sentance: &mut String, x: Option<&str>| {
+            match x {
+                Some(x) => {
+                    sentance.push_str(&kwargs.sep);
+                    sentance.push_str(x);
+                    Some(Some(sentance.clone()))
+                },
+                None => Some(None),
+            }
+        })
+        .collect_trusted();
+    Ok(out.into_series())
+}
+```
+
+Adding the `kwargs: AddKwargs` to the arguments and replace the space `" "` with `&kwargs.sep`.
+
+Remember to update in `__init__.py` as well:
+
+```python
+def cum_str(expr: IntoExprColumn, sep: str) -> pl.Expr:
+    return register_plugin_function(
+        plugin_path=PLUGIN_PATH,
+        function_name="cum_str",
+        args=[expr],
+        is_elementwise=False,
+        kwargs={"sep": sep},
+    )
+```
+
+By adding the `sep: str` in the argument and an extra `kwargs={"sep": sep}` in the `register_plugin_function` arguments.
+
+Now you can build and try out the new `cum_str` expression with a different separator string. You may found that the separator string appears at the front of the accumulated string. This may not be desirable, as an **extra challenge**, could you add an extra argument (a flag) so the user can decide to turn on and off the trilling separator strings at the front?
+
+---
+
+## Support this workshop
+
+This workshop is created by Cheuk and is open source for everyone to use (under MIT license). Please consider sponsoring Cheuk's work via [GitHub Sponsor](https://github.com/sponsors/Cheukting).
