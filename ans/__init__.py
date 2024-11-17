@@ -44,13 +44,13 @@ def largest(*args: IntoExpr) -> pl.Expr:
     )
 
 
-def cum_str(expr: IntoExprColumn, sep: str) -> pl.Expr:
+def cum_str(expr: IntoExprColumn, sep: str, trim: bool) -> pl.Expr:
     return register_plugin_function(
         plugin_path=PLUGIN_PATH,
         function_name="cum_str",
         args=[expr],
         is_elementwise=False,
-        kwargs={"sep": sep},
+        kwargs={"sep": sep, "trim": trim},
     )
 
 def cum_str_mul(expr1: IntoExprColumn, expr2: IntoExprColumn) -> pl.Expr:

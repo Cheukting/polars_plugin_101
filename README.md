@@ -428,7 +428,7 @@ def cum_str(expr: IntoExprColumn, sep: str) -> pl.Expr:
 
 By adding the `sep: str` in the argument and an extra `kwargs={"sep": sep}` in the `register_plugin_function` arguments.
 
-Now you can build and try out the new `cum_str` expression with a different separator string. You may found that the separator string appears at the front of the accumulated string. This may not be desirable, as an **extra challenge**, could you add an extra argument (a flag) so the user can decide to turn on and off the trilling separator strings at the front?
+Now you can build and try out the new `cum_str` expression with a different separator string. You may found that the separator string appears at the front of the accumulated string. This may not be desirable, as an **extra challenge**, could you add an extra argument (a flag) so the user can decide to turn on and off the leading separator strings at the front? ([see possible solution here](/ans))
 
 ---
 

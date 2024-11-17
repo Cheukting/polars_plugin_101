@@ -11,7 +11,7 @@ out = df.with_columns(names=capitalize("attendees"))
 print(out)
 
 # out_next = out.with_columns(all_folks=cum_str("names"))
-out_next = out.with_columns(all_folks=cum_str("names", sep=", "))
+out_next = out.with_columns(all_folks=cum_str("names", sep=", ", trim=True))
 
 print(out_next)
 

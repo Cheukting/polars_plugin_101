@@ -106,10 +106,12 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct AddKwargs {
     sep: String,
+    trim: bool,
 }
 
 #[polars_expr(output_type=String)]
 fn cum_str(inputs: &[Series], kwargs: AddKwargs) -> PolarsResult<Series> {
+    let mut start = true;
     let s = &inputs[0];
     let ca = s.str()?;
     let out: StringChunked = ca
@@ -117,8 +119,11 @@ fn cum_str(inputs: &[Series], kwargs: AddKwargs) -> PolarsResult<Series> {
         .scan(String::new(), |sentance: &mut String, x: Option<&str>| {
             match x {
                 Some(x) => {
-                    sentance.push_str(&kwargs.sep);
+                    if !start | !&kwargs.trim {
+                        sentance.push_str(&kwargs.sep);
+                    }
                     sentance.push_str(x);
+                    start = false;
                     Some(Some(sentance.clone()))
                 },
                 None => Some(None),
