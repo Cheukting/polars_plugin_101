@@ -50,8 +50,8 @@ Another tool that we will be using will be PyO3 and Maturin. To learn more about
 1. create a new working directory
 
 ```
-mkdir polars-plugin-101
-cd polars-plugin-101
+mkdir polars-plugin-workshop
+cd polars-plugin-workshop
 ```
 
 2. Set up virtual environment and activate it
