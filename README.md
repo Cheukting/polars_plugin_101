@@ -1,4 +1,4 @@
-arguments# Power up your Polars code with Polars extension
+# Power up your Polars code with Polars extension
 
 ## Why polars plugin?
 
