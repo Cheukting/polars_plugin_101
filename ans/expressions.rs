@@ -26,16 +26,52 @@ fn to_farenheit(inputs: &[Series]) -> PolarsResult<Series> {
 
 use polars::prelude::arity::broadcast_binary_elementwise_values;
 
-#[polars_expr(output_type=Int64)]
+
+fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    Ok(field.clone())
+}
+
+#[polars_expr(output_type_func=same_output_type)]
 fn larger(inputs: &[Series]) -> PolarsResult<Series> {
-    let first: &Int64Chunked = inputs[0].i64()?;
-    let second: &Int64Chunked = inputs[1].i64()?;
-    let out: Int64Chunked = broadcast_binary_elementwise_values(
-        first,
-        second,
-        |first: i64, second: i64| std::cmp::max(first , second)
-    );
-    Ok(out.into_series())
+    match inputs[0].dtype() {
+        DataType::Int32 => {
+            let result: Int32Chunked = broadcast_binary_elementwise_values(
+                inputs[0].i32()?,
+                inputs[1].i32()?,
+                |first: i32, second: i32| std::cmp::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        DataType::Int64 => {
+            let result: Int64Chunked = broadcast_binary_elementwise_values(
+                inputs[0].i64()?,
+                inputs[1].i64()?,
+                |first: i64, second: i64| std::cmp::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        DataType::Float32 => {
+            let result: Float32Chunked = broadcast_binary_elementwise_values(
+                inputs[0].f32()?,
+                inputs[1].f32()?,
+                |first: f32, second: f32| f32::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        DataType::Float64 => {
+            let result: Float64Chunked = broadcast_binary_elementwise_values(
+                inputs[0].f64()?,
+                inputs[1].f64()?,
+                |first: f64, second: f64| f64::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        dtype => {
+            polars_bail!(InvalidOperation:format!("dtype {dtype} not \
+            supported, expected Int32, Int64, Float32 or Float64."))
+        }
+    }
 }
 
 #[polars_expr(output_type=Int64)]

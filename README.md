@@ -1,4 +1,4 @@
-# Power up your Polars code with Polars extension
+arguments# Power up your Polars code with Polars extension
 
 ## Why polars plugin?
 
@@ -50,8 +50,8 @@ Another tool that we will be using will be PyO3 and Maturin. To learn more about
 1. create a new working directory
 
 ```
-mkdir polars-plugin-workshop
-cd polars-plugin-workshop
+mkdir polars-plugin-101
+cd polars-plugin-101
 ```
 
 2. Set up virtual environment and activate it
@@ -315,6 +315,85 @@ def larger(expr1: IntoExpr, expr2: IntoExpr) -> pl.Expr:
 We take two arguments `expr1` and `expr2` and combine the into a list to pass in `args` to match the type `&[Series]` in our Rust input.
 
 Now it's time to `maturin develop` and test it out! If you want an **extra challenge**, could you create an expression `largest` which take an arbitrary amount of inputs and always output the largest? ([see possible solution here](/ans))
+
+### Expression for multiple datatypes
+
+In the previous exercise, it assumes the data type is `Int64` and if it is another numerical data type, e.g. `Float64` it will not work and an error message will appear. You may wonder how to make a generic expression that return the larger numerical value, despite the data type (as long as it is numeric)?
+
+Well, it will require some mapping work that need to be done while creating the expression. First, we will need to be able to return the result in the same type as the input. To do that, we will modify the marco here:
+
+```rust
+#[polars_expr(output_type=Int64)]
+fn larger(inputs: &[Series]) -> PolarsResult<Series> {
+...
+}
+```
+
+to something like:
+
+```rust
+fn same_output_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    Ok(field.clone())
+}
+
+#[polars_expr(output_type_func=same_output_type)]
+fn larger(inputs: &[Series]) -> PolarsResult<Series> {
+...
+}
+```
+
+The `output_type_func` argument let us [define the output type with a function](https://github.com/pola-rs/pyo3-polars/tree/a6a37eff1ac65fe8935aef960e53902f9db7f041?tab=readme-ov-file#1-shared-library-plugins-for-polars).
+
+In our code, we assume that everything is in `i64`, now, we have to do a check on the dtype of the series and perform the corresponding code:
+
+```rust
+#[polars_expr(output_type_func=same_output_type)]
+fn larger(inputs: &[Series]) -> PolarsResult<Series> {
+    match inputs[0].dtype() {
+        DataType::Int32 => {
+            let result: Int32Chunked = broadcast_binary_elementwise_values(
+                inputs[0].i32()?,
+                inputs[1].i32()?,
+                |first: i32, second: i32| std::cmp::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        DataType::Int64 => {
+            let result: Int64Chunked = broadcast_binary_elementwise_values(
+                inputs[0].i64()?,
+                inputs[1].i64()?,
+                |first: i64, second: i64| std::cmp::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        DataType::Float32 => {
+            let result: Float32Chunked = broadcast_binary_elementwise_values(
+                inputs[0].f32()?,
+                inputs[1].f32()?,
+                |first: f32, second: f32| f32::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        DataType::Float64 => {
+            let result: Float64Chunked = broadcast_binary_elementwise_values(
+                inputs[0].f64()?,
+                inputs[1].f64()?,
+                |first: f64, second: f64| f64::max(first , second)
+            );
+            Ok(result.into_series())
+        },
+        dtype => {
+            polars_bail!(InvalidOperation:format!("dtype {dtype} not \
+            supported, expected Int32, Int64, Float32 or Float64."))
+        }
+    }
+}
+```
+
+Note that for `f64` and `f32` there are different implementation for returning the max value.
+
+There is no need to change the `__init__.py` so we can `maturin develop` and test it out directly. As for **extra challenge**, you can also update your `largest` method in similar fashion.
 
 ---
 

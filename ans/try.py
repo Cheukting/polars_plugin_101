@@ -30,13 +30,14 @@ print(out2)
 
 df3 = pl.DataFrame(
     {
-        "score_1": [10, 25, 76, 14],
-        "score_2": [9, 36, 16, 14],
-        "score_3": [80, 16, 66, 24],
+        "score_1": [10.3, 25.6, 76.1, 14.2],
+        "score_2": [9.5, 36.0, 16.5, 14.6],
+        "score_3": [80.3, 16.4, 66.5, 24.6],
     }
 )
+print(df3.dtypes)
 out3 = df3.with_columns(higher=larger("score_1", "score_2"))
-out3_again = df3.with_columns(highest=largest("score_1", "score_2", "score_3"))
+# out3_again = df3.with_columns(highest=largest("score_1", "score_2", "score_3"))
 
 print(out3)
 print(out3_again)
