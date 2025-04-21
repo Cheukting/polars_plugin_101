@@ -1,4 +1,4 @@
-arguments# Power up your Polars code with Polars extension
+# Power up your Polars code with Polars extension
 
 ## Why polars plugin?
 
@@ -20,9 +20,9 @@ In this workshop, we expect you to have knowledge of Python and Polars and have 
 
 Here are the things that you should have installed when you started this workshop:
 
-- [Install/ Update Rust](https://www.rust-lang.org/tools/install)(we are using rustc version 1.82.0 here)
-- Make sure having Python 3.8 or above (recommend 3.12)
-- Make sure using virtual environment (recommend using uv)
+- [Install/ Update Rust](https://www.rust-lang.org/tools/install)(we are using rustc version 1.86.0 here)
+- Make sure having Python 3.9 or above (assuming 3.13 in this workshop)
+- Make sure using virtual environment (recommend using uv >= 0.4.25)
 
 ## Windows checklist
 
@@ -71,8 +71,8 @@ uv pip install polars maturin
 
 These are the versions that we are using here:
 
- + maturin==1.7.4
- + polars==1.12.0
++ maturin==1.8.3
++ polars==1.27.1
 
  ---
 
